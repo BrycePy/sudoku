@@ -17,6 +17,7 @@ var currentBoard = [
 
 var recursivePos = Array(81).fill([])
 var recursiveStack = []
+var skipping = false
 
 function getBoardHtml(board){
   drawRecursiveTrace()
@@ -123,7 +124,7 @@ async function solve(board, depth = 0){
       return
     }
     iterCount++
-    if(slider.value != 0 || iterCount%100 == 0){
+    if(!skipping && (slider.value != 0 || iterCount%100 == 0)){
       await sleepms(slider.value)
       document.querySelector('#sudokuBoard').innerHTML = getBoardHtml(board);
     }
@@ -176,7 +177,7 @@ async function solve(board, depth = 0){
 
     _setBoard(board, x, y, 0)
 
-    if(slider.value != 0){
+    if(slider.value != 0 && !skipping){
       await sleepms(slider.value)
       document.querySelector('#sudokuBoard').innerHTML = getBoardHtml(board);
     }
@@ -219,11 +220,15 @@ function newBoard(){
 }
 
 function startSolver(){
+  skipButton.disabled = false
   running = true
+  skipping = false
   var board = [...currentBoard].map(e => [...e])
   solve(board).then(result=>{
     running = false
     startButton.disabled = false
+    skipButton.disabled = true
+    skipping = false
     recursivePos = Array(81).fill([])
     if(terminate){
       terminate = false
@@ -247,7 +252,11 @@ var body = `
       <div id="sudokuBoard"></div>
       <canvas id="sudokuBoardTrace" width = "500" height = "500"></canvas>
     </div>
-    <h3>Speed <input type="range" min="0" max="1000" value="100" class="slider" id="speedSetting"></h3>
+    <h3>
+      <span>Speed</span>
+      <input type="range" min="0" max="1000" value="100" class="slider" id="speedSetting">
+      <button id="skipButton" disabled=1>skip animation</button>
+    </h3>
   </center>
   <button id="startButton">start</button>
   <button id="resetButton">reset</button>
@@ -266,6 +275,7 @@ var editButton = document.getElementById("editButton");
 var clearButton = document.getElementById("clearButton");
 var boardName = document.getElementById("boardName");
 var newButton = document.getElementById("newButton");
+var skipButton = document.getElementById("skipButton");
 document.querySelector('#sudokuBoard').innerHTML = getBoardHtml(currentBoard);
 
 startButton.onclick = () =>{
@@ -287,6 +297,7 @@ editButton.onclick = async() =>{
     while(terminate) await sleepms(10)
   }
   document.querySelector('#sudokuBoard').innerHTML = getBoardEditHtml(currentBoard);
+  boardName.innerHTML = ``
 }
 
 clearButton.onclick = async() =>{
@@ -296,6 +307,7 @@ clearButton.onclick = async() =>{
   }
   clearBoard()
   document.querySelector('#sudokuBoard').innerHTML = getBoardHtml(currentBoard);
+  boardName.innerHTML = ``
 }
 
 newButton.onclick = async() =>{
@@ -305,6 +317,10 @@ newButton.onclick = async() =>{
   }
   var [difficulty, boardNumber] = newBoard()
   boardName.innerHTML = `<h3>${difficulty} (${boardNumber})</h3>`
+}
+
+skipButton.onclick = () =>{
+  skipping = true
 }
 
 function drawRecursiveTrace(){
