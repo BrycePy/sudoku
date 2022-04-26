@@ -36,6 +36,10 @@ table td{
   color: rgb(189, 255, 82);
 }
 
+.impossible{
+  background-color: rgb(255, 0, 0);
+}
+
 .possibleCount{
   padding-right: 1px;
   position: absolute;

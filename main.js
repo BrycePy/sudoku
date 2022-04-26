@@ -17,6 +17,9 @@ var currentBoard = [
 
 var recursivePos = Array(81).fill([]);
 var recursiveStack = [];
+
+var running = false;
+var terminate = false;
 var skipping = false;
 
 function getBoardHtml(board) {
@@ -37,10 +40,14 @@ function getBoardHtml(board) {
       if (currentBoard[i][j] != 0) {
         classes.push("originalPosition");
       }
-      var possibleCount = `<span class="possibleCount">${recursivePos[
-        j * 9 + i
-      ].join(" ")}</span>`;
-      body += `<td class="${classes.join(" ")}">${number}${possibleCount}</td>`;
+      // var possibleCount = `<span class="possibleCount">${recursivePos[j * 9 + i].join(" ")}</span>`;
+      // var candidates = getPossible(board, i, j)
+      if(possible_grid[j*9 + i] == 0){
+        classes.push("impossible");
+      }
+      // var candidatesHtml = `<span class="possibleCount">${candidates.join(" ")}</span>`;
+      var candidatesHtml = `<span class="possibleCount">${possible_grid[j*9 + i]}</span>`;
+      body += `<td class="${classes.join(" ")}">${number}${candidatesHtml}</td>`;
     }
     body += "</tr>";
   }
@@ -135,73 +142,82 @@ function isSolved(board) {
   return true;
 }
 
-var running = false;
-var terminate = false;
 var iterCount = 0;
-async function solve(board, depth = 0) {
-  if (terminate) {
-    return;
-  }
+async function updateDisplay(board){
   iterCount++;
-  if (!skipping && (slider.value != 0 || iterCount % 100 == 0)) {
+  if (terminate || skipping) return
+  if (slider.value != 0 || iterCount % 100 == 0) {
     await asyncSleep(slider.value);
     document.querySelector("#sudokuBoard").innerHTML = getBoardHtml(board);
   }
-  if (depth == 0) {
-    for (var y = 0; y < 9; y++) {
-      for (var x = 0; x < 9; x++) {
+}
+
+function updatePossibleGrid(board){
+  for (var y = 0; y < 9; y++) {
+    for (var x = 0; x < 9; x++) {
+      if (_getBoard(board, x, y) == 0) {
         var numPossible = getPossible(board, x, y).length;
-        possible_grid[y * 9 + x] = numPossible == 0 ? 999 : numPossible;
+        possible_grid[y * 9 + x] = numPossible;
+      }else{
+        possible_grid[y * 9 + x] = 999;
       }
     }
-    console.log(possible_grid);
+  }
+}
+
+async function solve(board, depth = 0) {
+  if (terminate) return
+  await updateDisplay(board)
+
+  if (depth == 0) {
+    updatePossibleGrid(board)
     recursiveStack.splice(0, recursiveStack.length);
   }
 
-  if (isSolved(board)) {
-    recursiveStack.pop();
+  if (isSolved(board))
     return board;
-  }
 
   var [x, y] = getMinRemainingPos();
   var possible = getPossible(board, x, y);
   if (possible.length == 0) return;
-  recursivePos[y * 9 + x] = possible;
-  var drawPos = [x, y];
-  recursiveStack.push(drawPos);
 
-  for (var c of possible) {
-    drawPos[0] = x + (Math.random() * 0.5 - 0.25);
-    drawPos[1] = y + (Math.random() * 0.5 - 0.25);
-    var temp_grid = [...possible_grid];
-    possible_grid[y * 9 + x] = 999;
-    _setBoard(board, x, y, c);
 
-    for (const pos of genRange(x, y)) {
-      var [xi, yi] = pos;
-      var numPossible = getPossible(board, xi, yi).length;
-      possible_grid[yi * 9 + xi] = numPossible == 0 ? 999 : numPossible;
+  try{
+    recursivePos[y * 9 + x] = possible;
+    var drawPos = [x, y];
+    recursiveStack.push(drawPos);
+
+    for (var c of possible) {
+      drawPos[0] = x + (Math.random() * 0.5 - 0.25);
+      drawPos[1] = y + (Math.random() * 0.5 - 0.25);
+
+      var temp_grid = [...possible_grid];
+      possible_grid[y * 9 + x] = 999;
+      _setBoard(board, x, y, c);
+
+      var canContinue = true;
+      for (const pos of genRange(x, y)) {
+        var [xi, yi] = pos;
+        if(_getBoard(board, xi, yi) == 0){
+          var possibleCount = getPossible(board, xi, yi).length;
+          possible_grid[yi * 9 + xi] = possibleCount;
+          if(possibleCount == 0 && optmizedCheckbox.checked)
+            canContinue = false;
+        }
+      }
+
+      if (canContinue && await solve(board, depth + 1))
+        return board;
+
+      possible_grid.map((e, i) => temp_grid[i]);
     }
+    _setBoard(board, x, y, 0);
 
-    if (await solve(board, depth + 1)) {
-      recursiveStack.pop();
-      return board;
-    }
-
-    possible_grid.splice(0, possible_grid.length);
-    possible_grid.push(...temp_grid);
+  }finally{
+    recursiveStack.pop();
+    recursivePos[y * 9 + x] = [];
+    await updateDisplay(board)
   }
-  recursivePos[y * 9 + x] = [];
-  recursiveStack.pop();
-
-  _setBoard(board, x, y, 0);
-
-  if (slider.value != 0 && !skipping) {
-    await asyncSleep(slider.value);
-    document.querySelector("#sudokuBoard").innerHTML = getBoardHtml(board);
-  }
-
-  return;
 }
 
 function asyncSleep(ms) {
@@ -233,9 +249,7 @@ window.setBoard = setBoard;
 
 function newBoard() {
   clearBoard();
-  var difficulty = ["very_easy", "easy", "medium", "hard"][
-    Math.floor(Math.random() * 4)
-  ];
+  var difficulty = "hard"
   var boardNumber = Math.floor(Math.random() * sudokuBoards[difficulty].length);
   currentBoard = [...sudokuBoards[difficulty][boardNumber]];
   currentBoard = currentBoard.map((e) => [...e]);
@@ -297,6 +311,10 @@ var body = `
   <button id="editButton">edit</button>
   <button id="clearButton">clear</button>
   <button id="newButton">new</button>
+  <br>
+  <br>
+  <input type="checkbox" id="optmizedCheckbox" name="optmizedCheckbox" checked>
+  <label for="optmizedCheckbox">smarter backtracking</label>
   `;
 
 document.querySelector("#app").innerHTML = body;
@@ -311,6 +329,7 @@ var clearButton = document.getElementById("clearButton");
 var boardName = document.getElementById("boardName");
 var newButton = document.getElementById("newButton");
 var skipButton = document.getElementById("skipButton");
+var optmizedCheckbox = document.getElementById("optmizedCheckbox");
 document.querySelector("#sudokuBoard").innerHTML = getBoardHtml(currentBoard);
 
 startButton.onclick = () => {
@@ -322,6 +341,7 @@ startButton.onclick = () => {
 startSkipButton.onclick = () => {
   startButton.disabled = true;
   startSkipButton.disabled = true;
+  slider.value = 0;
   startSolver();
   skipping = true;
   skipButton.disabled = true;
@@ -341,6 +361,7 @@ editButton.onclick = async () => {
     while (terminate) await asyncSleep(10);
   }
   document.querySelector("#sudokuBoard").innerHTML = getBoardEditHtml(currentBoard);
+  drawRecursiveTrace()
   boardName.innerHTML = ``;
 };
 
