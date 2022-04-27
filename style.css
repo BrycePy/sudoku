@@ -37,7 +37,11 @@ table td{
 }
 
 .impossible{
-  background-color: rgb(255, 0, 0);
+  background-color: rgb(216, 99, 99);
+}
+
+.fork{
+  background-color: rgb(190, 160, 103);
 }
 
 .possibleCount{

@@ -40,14 +40,16 @@ function getBoardHtml(board) {
       if (currentBoard[i][j] != 0) {
         classes.push("originalPosition");
       }
-      // var possibleCount = `<span class="possibleCount">${recursivePos[j * 9 + i].join(" ")}</span>`;
-      // var candidates = getPossible(board, i, j)
+      var possibleCount = "";
+      var forkCandidates = recursivePos[j * 9 + i]
+      if(forkCandidates.length > 1 && board[i][j] != forkCandidates[forkCandidates.length - 1]){
+        possibleCount = `<span class="possibleCount">${forkCandidates.join(" ")}</span>`;
+        classes.push("fork");
+      }
       if(possible_grid[j*9 + i] == 0){
         classes.push("impossible");
       }
-      // var candidatesHtml = `<span class="possibleCount">${candidates.join(" ")}</span>`;
-      var candidatesHtml = `<span class="possibleCount">${possible_grid[j*9 + i]}</span>`;
-      body += `<td class="${classes.join(" ")}">${number}${candidatesHtml}</td>`;
+      body += `<td class="${classes.join(" ")}">${number}${possibleCount}</td>`;
     }
     body += "</tr>";
   }
@@ -127,7 +129,12 @@ function getPossible(board, x, y) {
 
 function getMinRemainingPos() {
   var min_con = Math.min(...possible_grid.filter((e) => e != 0));
-  var index = possible_grid.indexOf(min_con);
+  if(randomMinCheckbox.checked){
+    var min_index = possible_grid.map((e, i) => e == min_con ? i : -1).filter((e) => e != -1);
+    var index = min_index[Math.floor(Math.random() * min_index.length)];
+  }else{
+    var index = possible_grid.indexOf(min_con);
+  }
   return [index % 9, Math.floor(index / 9)];
 }
 
@@ -146,9 +153,9 @@ var iterCount = 0;
 async function updateDisplay(board){
   iterCount++;
   if (terminate || skipping) return
-  if (slider.value != 0 || iterCount % 100 == 0) {
-    await asyncSleep(slider.value);
-    document.querySelector("#sudokuBoard").innerHTML = getBoardHtml(board);
+  if (speedSettingSlider.value != 0 || iterCount % 100 == 0) {
+    await asyncSleep(Math.pow(speedSettingSlider.value, 2));
+    sudokuDisplay.innerHTML = getBoardHtml(board);
   }
 }
 
@@ -181,13 +188,23 @@ async function solve(board, depth = 0) {
   var possible = getPossible(board, x, y);
   if (possible.length == 0) return;
 
-
+  var stackPopped = true;
   try{
     recursivePos[y * 9 + x] = possible;
     var drawPos = [x, y];
-    recursiveStack.push(drawPos);
+
+    if(possible.length>1){
+      stackPopped = false;
+      recursiveStack.push(drawPos);
+    }
 
     for (var c of possible) {
+      if(!stackPopped && c == possible[possible.length-1]){
+        stackPopped = true;
+        recursiveStack.pop(recursiveStack.indexOf(drawPos));
+      }
+
+
       drawPos[0] = x + (Math.random() * 0.5 - 0.25);
       drawPos[1] = y + (Math.random() * 0.5 - 0.25);
 
@@ -214,9 +231,11 @@ async function solve(board, depth = 0) {
     _setBoard(board, x, y, 0);
 
   }finally{
-    recursiveStack.pop();
     recursivePos[y * 9 + x] = [];
-    await updateDisplay(board)
+    if(!stackPopped){
+      recursiveStack.pop();
+      await updateDisplay(board)
+    }
   }
 }
 
@@ -253,7 +272,7 @@ function newBoard() {
   var boardNumber = Math.floor(Math.random() * sudokuBoards[difficulty].length);
   currentBoard = [...sudokuBoards[difficulty][boardNumber]];
   currentBoard = currentBoard.map((e) => [...e]);
-  document.querySelector("#sudokuBoard").innerHTML = getBoardHtml(currentBoard);
+  sudokuDisplay.innerHTML = getBoardHtml(currentBoard);
   return [difficulty, boardNumber];
 }
 
@@ -271,21 +290,18 @@ function startSolver() {
     skipButton.disabled = true;
     skipping = false;
     recursivePos = Array(81).fill([]);
+    possible_grid.map(e=>999);
+    recursiveStack.splice(0, recursiveStack.length);
     if (terminate) {
       terminate = false;
       return;
     }
     if (!result) {
-      document.querySelector("#sudokuBoard").innerHTML =
-        getBoardHtml(currentBoard);
-      document.querySelector(
-        "#sudokuBoard"
-      ).innerHTML += `<h1>No Solution (${timeTaken}ms)</h1>`;
+      sudokuDisplay.innerHTML = getBoardHtml(currentBoard);
+      sudokuDisplay.innerHTML += `<h1>No Solution (${timeTaken}ms)</h1>`;
     } else {
-      document.querySelector("#sudokuBoard").innerHTML = getBoardHtml(result);
-      document.querySelector(
-        "#sudokuBoard"
-      ).innerHTML += `<h1>Solved (${timeTaken}ms)</h1>`;
+      sudokuDisplay.innerHTML = getBoardHtml(result);
+      sudokuDisplay.innerHTML += `<h1>Solved (${timeTaken}ms)</h1>`;
     }
     console.log(currentBoard);
   });
@@ -301,7 +317,7 @@ var body = `
     </div>
     <h3>
       <span>Speed</span>
-      <input type="range" min="0" max="1000" value="100" class="slider" id="speedSetting">
+      <input type="range" min="0" max="32" value="1" class="slider" id="speedSetting">
       <button id="skipButton" disabled=1>skip animation</button>
     </h3>
   </center>
@@ -315,12 +331,15 @@ var body = `
   <br>
   <input type="checkbox" id="optmizedCheckbox" name="optmizedCheckbox" checked>
   <label for="optmizedCheckbox">smarter backtracking</label>
+  <br>
+  <input type="checkbox" id="randomMinCheckbox" name="randomMinCheckbox" checked>
+  <label for="randomMinCheckbox">random minimum candidate</label>
   `;
 
 document.querySelector("#app").innerHTML = body;
 var canvas = document.getElementById("sudokuBoardTrace");
 var ctx = canvas.getContext("2d");
-var slider = document.getElementById("speedSetting");
+var speedSettingSlider = document.getElementById("speedSetting");
 var startButton = document.getElementById("startButton");
 var startSkipButton = document.getElementById("startSkipButton");
 var resetButton = document.getElementById("resetButton");
@@ -330,7 +349,9 @@ var boardName = document.getElementById("boardName");
 var newButton = document.getElementById("newButton");
 var skipButton = document.getElementById("skipButton");
 var optmizedCheckbox = document.getElementById("optmizedCheckbox");
-document.querySelector("#sudokuBoard").innerHTML = getBoardHtml(currentBoard);
+var randomMinCheckbox = document.getElementById("randomMinCheckbox");
+var sudokuDisplay = document.getElementById("sudokuBoard");
+sudokuDisplay.innerHTML = getBoardHtml(currentBoard);
 
 startButton.onclick = () => {
   startButton.disabled = true;
@@ -341,7 +362,7 @@ startButton.onclick = () => {
 startSkipButton.onclick = () => {
   startButton.disabled = true;
   startSkipButton.disabled = true;
-  slider.value = 0;
+  speedSettingSlider.value = 0;
   startSolver();
   skipping = true;
   skipButton.disabled = true;
@@ -352,7 +373,7 @@ resetButton.onclick = async () => {
     terminate = true;
     while (terminate) await asyncSleep(10);
   }
-  document.querySelector("#sudokuBoard").innerHTML = getBoardHtml(currentBoard);
+  sudokuDisplay.innerHTML = getBoardHtml(currentBoard);
 };
 
 editButton.onclick = async () => {
@@ -360,7 +381,7 @@ editButton.onclick = async () => {
     terminate = true;
     while (terminate) await asyncSleep(10);
   }
-  document.querySelector("#sudokuBoard").innerHTML = getBoardEditHtml(currentBoard);
+  sudokuDisplay.innerHTML = getBoardEditHtml(currentBoard);
   drawRecursiveTrace()
   boardName.innerHTML = ``;
 };
@@ -371,7 +392,7 @@ clearButton.onclick = async () => {
     while (terminate) await asyncSleep(10);
   }
   clearBoard();
-  document.querySelector("#sudokuBoard").innerHTML = getBoardHtml(currentBoard);
+  sudokuDisplay.innerHTML = getBoardHtml(currentBoard);
   boardName.innerHTML = ``;
 };
 
@@ -392,10 +413,12 @@ function drawRecursiveTrace() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   var cWidth = canvas.width / 9;
   var cHeight = canvas.height / 9;
+  ctx.lineWidth = 10;
   for (var i = 0; i < recursiveStack.length - 1; i++) {
+    ctx.lineWidth -= 0.5;
     var [xf, yf] = recursiveStack[i];
     var [xt, yt] = recursiveStack[i + 1];
-    ctx.strokeStyle = `hsl(${i * 10},100%,50%)`;
+    ctx.strokeStyle = `hsla(${i * 15},100%,50%, 0.5)`;
     ctx.beginPath();
     ctx.moveTo(yf * cWidth + cHeight * 0.5, xf * cHeight + cHeight * 0.5);
     ctx.lineTo(yt * cWidth + cHeight * 0.5, xt * cHeight + cHeight * 0.5);
