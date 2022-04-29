@@ -276,6 +276,18 @@ function newBoard() {
   return [difficulty, boardNumber];
 }
 
+function newBoardNum(n) {
+  clearBoard();
+  var difficulty = "hard"
+  var boardNumber = n;
+  currentBoard = [...sudokuBoards[difficulty][boardNumber]];
+  currentBoard = currentBoard.map((e) => [...e]);
+  sudokuDisplay.innerHTML = getBoardHtml(currentBoard);
+  boardName.innerHTML = `<h3>${difficulty} (${boardNumber})</h3>`;
+  return [difficulty, boardNumber];
+}
+window.newBoardNum = newBoardNum
+
 function startSolver() {
   skipButton.disabled = false;
   running = true;
@@ -303,9 +315,16 @@ function startSolver() {
       sudokuDisplay.innerHTML = getBoardHtml(result);
       sudokuDisplay.innerHTML += `<h1>Solved (${timeTaken}ms)</h1>`;
     }
-    console.log(currentBoard);
+    // console.log(currentBoard);
   });
 }
+
+var boardSelectHtml = `
+  <select onchange="newBoardNum(this.selectedIndex-1)">
+    <option value="" selected disabled hidden>Choose here</option>
+    ${Array(15).fill(0).map((e, i) => `<option value="${i}">hard - ${i}</option>`).join("")}
+  </select>
+`
 
 var body = `
   <h1>Sudoku Solver (CSP)</h1>
@@ -327,6 +346,7 @@ var body = `
   <button id="editButton">edit</button>
   <button id="clearButton">clear</button>
   <button id="newButton">new</button>
+  ${boardSelectHtml}
   <br>
   <br>
   <input type="checkbox" id="optmizedCheckbox" name="optmizedCheckbox" checked>
