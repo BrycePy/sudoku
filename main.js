@@ -1,5 +1,6 @@
 import "./style.css";
 import sudokuBoards from "./sudokuBoards.json";
+import { generate } from "./sudokuGenerator";
 
 var possible_grid = Array(81).fill(999);
 
@@ -266,14 +267,20 @@ async function setBoard(x, y, input) {
 }
 window.setBoard = setBoard;
 
-function newBoard() {
+function newBoard(baord) {
   clearBoard();
-  var difficulty = "hard"
-  var boardNumber = Math.floor(Math.random() * sudokuBoards[difficulty].length);
-  currentBoard = [...sudokuBoards[difficulty][boardNumber]];
-  currentBoard = currentBoard.map((e) => [...e]);
-  sudokuDisplay.innerHTML = getBoardHtml(currentBoard);
-  return [difficulty, boardNumber];
+  if(baord){
+    currentBoard = [...baord].map((e) => [...e]);
+    sudokuDisplay.innerHTML = getBoardHtml(currentBoard);
+    return ["", ""];
+  }else{
+    var difficulty = "hard"
+    var boardNumber = Math.floor(Math.random() * sudokuBoards[difficulty].length);
+    currentBoard = [...sudokuBoards[difficulty][boardNumber]];
+    currentBoard = currentBoard.map((e) => [...e]);
+    sudokuDisplay.innerHTML = getBoardHtml(currentBoard);
+    return [difficulty, boardNumber];
+  }
 }
 
 function newBoardNum(n) {
@@ -416,13 +423,13 @@ clearButton.onclick = async () => {
   boardName.innerHTML = ``;
 };
 
-newButton.onclick = async () => {
+window.onload = newButton.onclick = async () => {
   if (running) {
     terminate = true;
     while (terminate) await asyncSleep(10);
   }
-  var [difficulty, boardNumber] = newBoard();
-  boardName.innerHTML = `<h3>${difficulty} (${boardNumber})</h3>`;
+  var [difficulty, boardNumber] = newBoard(await generate());
+  boardName.innerHTML = ``;
 };
 
 skipButton.onclick = () => {
